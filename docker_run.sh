@@ -1,7 +1,15 @@
 #!/bin/sh
 
+KITTI_DATASET=/media/ken/EC-PHU3/dataset/kitti/object
+OUTPUT_DIR=/home/ken/det3d_output
 
-docker run --gpus all -it --rm -v `pwd`:/workspace/Det3D \
+docker run --gpus all -it --rm \
+           --shm-size=2g \
+           -v `pwd`:/workspace/Det3D \
+           -v ${KITTI_DATASET}:/dataset/kitti \
+           -v ${OUTPUT_DIR}:/output \
+           -v /tmp/.X11-unix:/tmp/.X11-unix \
+           -e DISPLAY=$DISPLAY \
            det3d:test
 
 # display settings in container
@@ -9,3 +17,6 @@ docker run --gpus all -it --rm -v `pwd`:/workspace/Det3D \
 
 # cd Det3D
 # python3 setup.py build develop
+
+# memo
+# 

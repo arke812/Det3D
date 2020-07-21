@@ -52,3 +52,48 @@ class PointPillars(SingleStageDetector):
             return self.bbox_head.loss(example, preds)
         else:
             return self.bbox_head.predict(example, preds, self.test_cfg)
+
+
+@DETECTORS.register_module
+class PointPillarsListInputWrapper(PointPillars):
+    def __init__(
+        self,
+        reader,
+        backbone,
+        neck,
+        bbox_head,
+        train_cfg=None,
+        test_cfg=None,
+        pretrained=None,
+    ):
+        super(PointPillarsListInputWrapper, self).__init__(
+            reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained
+        )
+
+    def forward(self,
+        voxels,
+        coordinates, # should be const?
+        num_points_in_voxel,
+        num_voxels,
+        input_shape, # should be const
+        anchors,
+        return_loss=False,
+        # **kwargs
+        ):
+        """
+        limitation for tensorrt convertion:
+         - first dimension must be batch dimension. this dim size is overwritten by 1
+        """
+        example = dict(
+            voxels=voxels.squeeze(0),
+            coordinates=coordinates.squeeze(0),
+            num_points=num_points_in_voxel.squeeze(0),
+            num_voxels=num_voxels.squeeze(0),
+            shape=input_shape,
+            anchors=anchors,
+        )
+        return super(PointPillarsListInputWrapper, self).forward(
+            example,
+            return_loss,
+            # **kwargs
+        )

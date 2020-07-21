@@ -1,3 +1,4 @@
+from pathlib import Path
 import itertools
 import logging
 
@@ -43,6 +44,7 @@ box_coder = dict(
 # model settings
 model = dict(
     type="PointPillars",
+    # type="PointPillarsListInputWrapper",
     pretrained=None,
     reader=dict(
         type="PillarFeatureNet",
@@ -120,12 +122,12 @@ test_cfg = dict(
 
 # dataset settings
 dataset_type = "KittiDataset"
-data_root = "/data/Datasets/KITTI/Kitti/object"
+data_root = Path("/dataset/kitti")
 
 db_sampler = dict(
     type="GT-AUG",
     enable=True,
-    db_info_path="/data/Datasets/KITTI/Kitti/object/dbinfos_train.pkl",
+    db_info_path=data_root / "dbinfos_train.pkl",
     sample_groups=[dict(Car=15,),],
     db_prep_steps=[
         dict(filter_by_min_num_points=dict(Car=5,)),
@@ -184,8 +186,8 @@ test_pipeline = [
     dict(type="Reformat"),
 ]
 
-train_anno = "/data/Datasets/KITTI/Kitti/object/kitti_infos_train.pkl"
-val_anno = "/data/Datasets/KITTI/Kitti/object/kitti_infos_val.pkl"
+train_anno = data_root / 'kitti_infos_train.pkl'
+val_anno = data_root / 'kitti_infos_val.pkl'
 test_anno = None
 
 data = dict(
@@ -194,7 +196,7 @@ data = dict(
     train=dict(
         type=dataset_type,
         root_path=data_root,
-        info_path=data_root + "/kitti_infos_train.pkl",
+        info_path=data_root / "kitti_infos_train.pkl",
         ann_file=train_anno,
         class_names=class_names,
         pipeline=train_pipeline,
@@ -202,7 +204,7 @@ data = dict(
     val=dict(
         type=dataset_type,
         root_path=data_root,
-        info_path=data_root + "/kitti_infos_val.pkl",
+        info_path=data_root / "kitti_infos_val.pkl",
         ann_file=val_anno,
         class_names=class_names,
         pipeline=test_pipeline,
@@ -258,7 +260,7 @@ total_epochs = 100
 device_ids = range(8)
 dist_params = dict(backend="nccl", init_method="env://")
 log_level = "INFO"
-work_dir = "/data/Outputs/det3d_Outputs/Point_Pillars"
+work_dir = "/output"
 load_from = None
 resume_from = None
 workflow = [("train", 5), ("val", 1)]

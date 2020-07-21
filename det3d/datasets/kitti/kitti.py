@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 import os
+from pathlib import Path
 
 from copy import deepcopy
 
@@ -38,7 +39,7 @@ class KittiDataset(PointCloudDataset):
         self._num_point_features = __class__.NumPointFeatures
         # print("remain number of infos:", len(self._kitti_infos))
         self._class_names = class_names
-        self.plane_dir = "/data/Datasets/KITTI/Kitti/object/training/planes"
+        self.plane_dir = Path(root_path) / "training/planes"
 
     def __len__(self):
         if not hasattr(self, "_kitti_infos"):

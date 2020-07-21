@@ -59,7 +59,19 @@ RUN pip3 install setuptools==39.1.0 && \
 
 
 # torch2trt
-RUN git clone https://github.com/NVIDIA-AI-IOT/torch2trt && \
+RUN git clone https://github.com/arke812/torch2trt && \
     cd torch2trt && \
-    python3 setup.py install
+    # python3 setup.py install
+    python3 setup.py build develop
 # or python setup.py install --plugins
+
+
+RUN apt-get install -y sudo
+ARG DOCKER_UID=1000
+ARG DOCKER_USER=docker
+ARG DOCKER_PASSWORD=docker
+RUN useradd -m \
+  --uid ${DOCKER_UID} --groups sudo ${DOCKER_USER} \
+  && echo ${DOCKER_USER}:${DOCKER_PASSWORD} | chpasswd
+
+USER ${DOCKER_USER}
