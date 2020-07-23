@@ -265,7 +265,7 @@ def convert_by_torch2trt():
     # build the model and load checkpoint
     dbg = True
     if dbg:
-        cfg.model.type = cfg.model.type + 'ListInputWrapper'
+        cfg.model.type = cfg.model.type + 'ListIOWrapper'
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
     # model = MegDataParallel(model, device_ids=[0])
     model.to('cuda')
@@ -318,14 +318,16 @@ def convert_by_torch2trt():
     # x = torch.ones((1, 3, 224, 224)).cuda()
     # model_trt = torch2trt(model, [x])
 
-    input_shape_torch = torch.tensor(example["shape"][0])
-    example_list = [example['voxels'].unsqueeze(0),
-                    example['coordinates'].unsqueeze(0),
-                    example['num_points'].unsqueeze(0),
-                    example['num_voxels'].int().unsqueeze(0),
-                    input_shape_torch.int().unsqueeze(0).to('cuda'),
-                    example["anchors"][0].unsqueeze(0)]
-    model_trt = torch2trt(model, example_list)
+    # memo: first dimension must be a batch dimension for torch2trt...
+
+        input_shape_torch = torch.tensor(example["shape"][0])
+        example_list = [example['voxels'].unsqueeze(0),
+                        example['coordinates'].unsqueeze(0),
+                        example['num_points'].unsqueeze(0),
+                        example['num_voxels'].int().unsqueeze(0),
+                        input_shape_torch.int().unsqueeze(0).to('cuda'),
+                        example["anchors"][0].unsqueeze(0)]
+        model_trt = torch2trt(model, example_list)
 
 
     # execute

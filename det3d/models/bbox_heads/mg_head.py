@@ -1041,9 +1041,12 @@ class MultiGroupHead(nn.Module):
                 label_preds = selected_labels
                 if self.use_direction_classifier:
                     dir_labels = selected_dir_labels
-                    opp_labels = (
-                        (box_preds[..., -1] - self.direction_offset) > 0
-                    ) ^ dir_labels.bool()
+                    # opp_labels = (
+                    #     (box_preds[..., -1] - self.direction_offset) > 0
+                    # ) ^ dir_labels.bool()
+                    # if ((box_preds[..., -1] - self.direction_offset) > 0).all():
+                    #     raise RuntimeError('')
+                    opp_labels = dir_labels.bool() == False
                     box_preds[..., -1] += torch.where(
                         opp_labels,
                         torch.tensor(np.pi).type_as(box_preds),
@@ -1053,8 +1056,11 @@ class MultiGroupHead(nn.Module):
                 final_scores = scores
                 final_labels = label_preds
                 if post_center_range is not None:
-                    mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
-                    mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
+                    # mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
+                    mask = (final_box_preds[:, :3] >= post_center_range[:3]).min(1)[0]
+                    # mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
+                    mask_tmp = (final_box_preds[:, :3] <= post_center_range[3:]).min(1)[0]
+                    mask *= mask_tmp
                     predictions_dict = {
                         "box3d_lidar": final_box_preds[mask],
                         "scores": final_scores[mask],

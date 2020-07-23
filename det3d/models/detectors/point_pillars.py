@@ -55,7 +55,7 @@ class PointPillars(SingleStageDetector):
 
 
 @DETECTORS.register_module
-class PointPillarsListInputWrapper(PointPillars):
+class PointPillarsListIOWrapper(PointPillars):
     def __init__(
         self,
         reader,
@@ -66,7 +66,7 @@ class PointPillarsListInputWrapper(PointPillars):
         test_cfg=None,
         pretrained=None,
     ):
-        super(PointPillarsListInputWrapper, self).__init__(
+        super(PointPillarsListIOWrapper, self).__init__(
             reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained
         )
 
@@ -92,8 +92,15 @@ class PointPillarsListInputWrapper(PointPillars):
             shape=input_shape,
             anchors=anchors,
         )
-        return super(PointPillarsListInputWrapper, self).forward(
+        out_dict = super(PointPillarsListIOWrapper, self).forward(
             example,
             return_loss,
             # **kwargs
         )
+
+        out_list = [(o['box3d_lidar'], o['scores'], o['label_preds']) for o in out_dict]
+
+        if len(out_list) != 1:
+            RuntimeError('batch size must be 1.')
+
+        return out_list[0]

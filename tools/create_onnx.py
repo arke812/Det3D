@@ -95,8 +95,10 @@ def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MegDet test detector")
-    parser.add_argument("config", help="test config file path")
-    parser.add_argument("checkpoint", help="checkpoint file")
+    parser.add_argument("--config", help="test config file path",
+        default='/workspace/Det3D/examples/point_pillars/configs/kitti_point_pillars_mghead_syncbn.py')
+    parser.add_argument("--checkpoint", help="checkpoint file",
+        default='/output/PointPillars_test_20200718-171357/latest.pth')
     parser.add_argument("--out", help="output result file")
     parser.add_argument(
         "--json_out", help="output result file name without extension", type=str
@@ -209,6 +211,123 @@ def main():
 
         print(ap_result_str)
 
+def create_onnx():
+    import torch
+    import torch2trt as t2t
+    from torch2trt import torch2trt
+
+    # load model
+    args = parse_args()
+
+    # assert args.out or args.show or args.json_out, (
+    #     "Please specify at least one operation (save or show the results) "
+    #     'with the argument "--out" or "--show" or "--json_out"'
+    # )
+
+    if args.out is not None and not args.out.endswith((".pkl", ".pickle")):
+        raise ValueError("The output file must be a pkl file.")
+
+    if args.json_out is not None and args.json_out.endswith(".json"):
+        args.json_out = args.json_out[:-5]
+
+    cfg = torchie.Config.fromfile(args.config)
+    # set cudnn_benchmark
+    if cfg.get("cudnn_benchmark", False):
+        torch.backends.cudnn.benchmark = True
+
+    # cfg.model.pretrained = None
+    # cfg.data.test.test_mode = True
+    cfg.data.val.test_mode = True
+
+    # init distributed env first, since logger depends on the dist info.
+    distributed = False
+
+    # build the dataloader
+    # TODO: support multiple images per gpu (only minor changes are needed)
+    # dataset = build_dataset(cfg.data.test)
+    dataset = build_dataset(cfg.data.val)
+    data_loader = build_dataloader(
+        dataset,
+        # batch_size=cfg.data.samples_per_gpu,
+        # workers_per_gpu=cfg.data.workers_per_gpu,
+        batch_size=1,
+        workers_per_gpu=1,
+        dist=distributed,
+        shuffle=False,
+    )
+
+    # build the model and load checkpoint
+    dbg = True
+    if dbg:
+        cfg.model.type = cfg.model.type + 'ListIOWrapper'
+    model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+    # model = MegDataParallel(model, device_ids=[0])
+    model.to('cuda')
+
+    # create some regular pytorch model...
+    # model = alexnet(pretrained=True).eval().cuda()
+
+    # create example data
+    # x = torch.ones((1, 3, 224, 224)).cuda()
+    model.eval()
+    results_dict = []
+    cpu_device = torch.device("cpu")
+
+    results_dict = {}
+    # prog_bar = torchie.ProgressBar(len(data_loader.dataset))
+    batch = next(iter(data_loader))
+    # example = example_convert_to_torch(batch, device=device)
+    example = example_to_device(batch, device='cuda')
+
+    with torch.no_grad():
+        show = False
+        if not dbg:
+            outputs = model(example, return_loss=False, rescale=not show)
+        else:
+            outputs = model(example['voxels'].unsqueeze(0),
+                            example['coordinates'].unsqueeze(0),
+                            example['num_points'].unsqueeze(0),
+                            example['num_voxels'].int().unsqueeze(0),
+                            torch.tensor(example["shape"][0]).int().unsqueeze(0).to('cuda'),
+                            example["anchors"][0].unsqueeze(0),
+                            return_loss=False)
+        # for output in outputs:
+        #     token = output["metadata"]["token"]
+        #     for k, v in output.items():
+        #         if k not in [
+        #             "metadata",
+        #         ]:
+        #             output[k] = v.to(cpu_device)
+        #     results_dict.update(
+        #         {token: output,}
+        #     )
+    # return results_dict
+
+
+
+
+    # convert to TensorRT feeding sample data as input
+    # from torchvision.models.alexnet import alexnet
+    # model = alexnet(pretrained=False).eval().cuda()
+    # x = torch.ones((1, 3, 224, 224)).cuda()
+    # model_trt = torch2trt(model, [x])
+
+    # memo: first dimension must be a batch dimension for torch2trt...
+
+        input_shape_torch = torch.tensor(example["shape"][0])
+        example_list = [example['voxels'].unsqueeze(0),
+                        example['coordinates'].unsqueeze(0),
+                        example['num_points'].unsqueeze(0),
+                        example['num_voxels'].int().unsqueeze(0),
+                        input_shape_torch.int().unsqueeze(0).to('cuda'),
+                        example["anchors"][0].unsqueeze(0)]
+
+        # TODO:
+        # - compare results
+        # - support dynamic input/output
+        torch.onnx.export(model, tuple(example_list), 'pointpillars.onnx', verbose=True, opset_version=11)
+
 
 if __name__ == "__main__":
-    main()
+    # main()
+    create_onnx()
