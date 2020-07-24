@@ -99,8 +99,13 @@ class PointPillarsListIOWrapper(PointPillars):
         )
 
         out_list = [(o['box3d_lidar'], o['scores'], o['label_preds']) for o in out_dict]
+        # out_list = [(o['box_preds'], o['cls_preds'], o['dir_cls_preds']) for o in out_dict]
 
         if len(out_list) != 1:
             RuntimeError('batch size must be 1.')
 
         return out_list[0]
+
+
+
+

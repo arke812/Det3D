@@ -1057,10 +1057,10 @@ class MultiGroupHead(nn.Module):
                 final_labels = label_preds
                 if post_center_range is not None:
                     # mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
-                    mask = (final_box_preds[:, :3] >= post_center_range[:3]).min(1)[0]
                     # mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
-                    mask_tmp = (final_box_preds[:, :3] <= post_center_range[3:]).min(1)[0]
-                    mask *= mask_tmp
+                    mask1 = (final_box_preds[:, :3] >= post_center_range[:3]).int().min(1)[0]
+                    mask2 = (final_box_preds[:, :3] <= post_center_range[3:]).int().min(1)[0]
+                    mask = (mask1 * mask2).bool()
                     predictions_dict = {
                         "box3d_lidar": final_box_preds[mask],
                         "scores": final_scores[mask],

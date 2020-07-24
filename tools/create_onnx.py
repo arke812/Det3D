@@ -30,6 +30,63 @@ from det3d.utils.dist.dist_common import (
 )
 from tqdm import tqdm
 
+# dbg
+from torch import nn
+class PointPillarsScatterTest(nn.Module):
+    def __init__(
+        self, num_input_features=64, norm_cfg=None, name="PointPillarsScatter", **kwargs
+    ):
+        """
+        Point Pillar's Scatter.
+        Converts learned features from dense tensor to sparse pseudo image. This replaces SECOND's
+        second.pytorch.voxelnet.SparseMiddleExtractor.
+        :param output_shape: ([int]: 4). Required output shape of features.
+        :param num_input_features: <int>. Number of input features.
+        """
+
+        super().__init__()
+        self.name = "PointPillarsScatter"
+        self.nchannels = num_input_features
+
+    def forward(self, voxel_features, coords, batch_size, input_shape):
+
+        self.nx = input_shape[0]
+        self.ny = input_shape[1]
+
+        # batch_canvas will be the final output.
+        batch_canvas = []
+        for batch_itt in range(batch_size):
+            # Create the canvas for this sample
+            canvas = torch.zeros(
+                self.nchannels,
+                self.nx * self.ny,
+                dtype=voxel_features.dtype,
+                device=voxel_features.device,
+            )
+
+            # Only include non-empty pillars
+            batch_mask = coords[:, 0] == batch_itt
+
+            this_coords = coords[batch_mask, :]
+            indices = this_coords[:, 2] * self.nx + this_coords[:, 3]
+            indices = indices.type(torch.long)
+            voxels = voxel_features[batch_mask, :]
+            voxels = voxels.t()
+
+            # Now scatter the blob back to the canvas.
+            canvas[:, indices] = voxels
+
+            # Append to a list for later stacking.
+            batch_canvas.append(canvas)
+
+        # Stack to 3-dim tensor (batch-size, nchannels, nrows*ncols)
+        batch_canvas = torch.stack(batch_canvas, 0)
+        # return voxels
+
+        # Undo the column stacking to final 4-dim tensor
+        batch_canvas = batch_canvas.view(batch_size, self.nchannels, self.ny, self.nx)
+        return batch_canvas
+
 
 def test(
     dataloader, model, save_dir="", device="cuda", distributed=False,
@@ -319,13 +376,63 @@ def create_onnx():
                         example['coordinates'].unsqueeze(0),
                         example['num_points'].unsqueeze(0),
                         example['num_voxels'].int().unsqueeze(0),
-                        input_shape_torch.int().unsqueeze(0).to('cuda'),
-                        example["anchors"][0].unsqueeze(0)]
-
+                        # input_shape_torch.int().unsqueeze(0).to('cuda'),
+                        input_shape_torch.unsqueeze(0).to('cuda'),
+                        example['anchors'][0].unsqueeze(0)]
+        input_names = ['voxels', 'coordinates', 'num_points', 'num_voxels', 'input_shape', 'anchors']
+        output_names = ['box3d_lidar', 'scores', 'label_preds']
         # TODO:
         # - compare results
         # - support dynamic input/output
-        torch.onnx.export(model, tuple(example_list), 'pointpillars.onnx', verbose=True, opset_version=11)
+        torch.onnx.export(model, tuple(example_list), 'pointpillars.onnx',
+                          input_names=input_names, output_names=output_names,
+                          verbose=True, opset_version=11)
+
+        # input_features = model.reader(
+        #     example['voxels'], example['num_voxels'].int(), example['coordinates']
+        # )
+        # tmp_mdl = PointPillarsScatterTest()
+        # test_input = (input_features, example['coordinates'], torch.tensor(1).to('cuda'), input_shape_torch.to('cuda'))
+        # torch.onnx.export(tmp_mdl, #model.backbone,
+        #                   test_input,
+        #                   'pointpillars.onnx', verbose=True, opset_version=11)
+
+    # # caffe2
+    # import onnx
+
+    # # Load the ONNX model
+    # model = onnx.load('pointpillars.onnx')
+
+    # # Check that the IR is well formed
+    # onnx.checker.check_model(model)
+
+    # # Print a human readable representation of the graph
+    # onnx.helper.printable_graph(model.graph)
+    # import caffe2.python.onnx.backend as backend
+    # import numpy as np
+    # rep = backend.prepare(model, device="CUDA:0") # or "CPU"
+    # # For the Caffe2 backend:
+    # #     rep.predict_net is the Caffe2 protobuf for the network
+    # #     rep.workspace is the Caffe2 workspace for the network
+    # #       (see the class caffe2.python.onnx.backend.Workspace)
+    # outputs = rep.run(np.random.randn(10, 3, 224, 224).astype(np.float32))
+    # # To run networks with more than one input, pass a tuple
+    # # rather than a single numpy ndarray.
+    # print(outputs[0])
+
+
+
+    import onnxruntime as ort
+    import numpy as np
+    ort_session = ort.InferenceSession('pointpillars.onnx')
+    outputs = ort_session.run(None, {'voxels': example_list[0].cpu().numpy(),
+                                     'coordinates': example_list[1].cpu().numpy(),
+                                     'num_points': example_list[2].cpu().numpy(),
+                                     'num_voxels': example_list[3].cpu().numpy(),
+                                     'input_shape': example_list[4].cpu().numpy(),
+                                     'anchors': example_list[5].cpu().numpy()})
+
+    print(outputs[0])
 
 
 if __name__ == "__main__":
