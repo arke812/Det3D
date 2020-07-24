@@ -93,7 +93,7 @@ class RPN(nn.Module):
                         nn.ReLU(),
                     )
                 else:
-                    stride = np.round(1 / stride).astype(np.int64)
+                    stride = int(np.round(1 / stride))
                     deblock = Sequential(
                         nn.Conv2d(
                             num_out_filters,
@@ -109,6 +109,8 @@ class RPN(nn.Module):
                         nn.ReLU(),
                     )
                 deblocks.append(deblock)
+            else: # add dummy deblock for jit support
+                deblocks.append(Sequential())
         self.blocks = nn.ModuleList(blocks)
         self.deblocks = nn.ModuleList(deblocks)
 
@@ -149,10 +151,10 @@ class RPN(nn.Module):
 
     def forward(self, x):
         ups = []
-        for i in range(len(self.blocks)):
-            x = self.blocks[i](x)
+        for i, (b, d) in enumerate(zip(self.blocks, self.deblocks)):
+            x = b(x)
             if i - self._upsample_start_idx >= 0:
-                ups.append(self.deblocks[i - self._upsample_start_idx](x))
+                ups.append(d(x))
         if len(ups) > 0:
             x = torch.cat(ups, dim=1)
 

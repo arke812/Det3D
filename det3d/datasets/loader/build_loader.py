@@ -38,7 +38,7 @@ def build_dataloader(
         num_workers = workers_per_gpu
     else:
         sampler = GroupSampler(dataset, batch_size) if shuffle else None
-        sampler = None
+        # sampler = None
         batch_size = num_gpus * batch_size
         num_workers = num_gpus * workers_per_gpu
 
@@ -47,7 +47,7 @@ def build_dataloader(
         dataset,
         batch_size=batch_size,
         sampler=sampler,
-        shuffle=(sampler is None),
+        shuffle=not (sampler is None),
         num_workers=num_workers,
         collate_fn=collate_kitti,
         # pin_memory=True,

@@ -1,6 +1,7 @@
 # FROM nvcr.io/nvidia/pytorch:19.12-py3
 # FROM pytorch/pytorch:1.3-cuda10.1-cudnn7-devel
-FROM nvcr.io/nvidia/tensorrt:20.02-py3
+# FROM nvcr.io/nvidia/tensorrt:20.02-py3
+FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ADD requirements.txt .
@@ -14,7 +15,8 @@ RUN apt-get update && \
 
 # RUN pip install torch==1.3.0 torchvision==0.4.1
 # RUN pip3 install torch==1.4.0 torchvision==0.5.0
-RUN pip3 install torch===1.5.1 torchvision===0.6.1 -f https://download.pytorch.org/whl/torch_stable.html
+# RUN pip3 install torch===1.5.1 torchvision===0.6.1 -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 
 # spconv
 RUN pip3 install cmake && \
@@ -57,13 +59,16 @@ RUN pip3 install setuptools==39.1.0 && \
 #                        python-libnvinfer=7.0.0-1+cuda10.0 \
 #                        python3-libnvinfer=7.0.0-1+cuda10.0
 
+# onnx runtime-gpu
+RUN pip3 install onnxruntime-gpu
+
 
 # torch2trt
-RUN git clone https://github.com/arke812/torch2trt && \
-    cd torch2trt && \
-    # python3 setup.py install
-    python3 setup.py build develop
-# or python setup.py install --plugins
+# RUN git clone https://github.com/arke812/torch2trt && \
+#     cd torch2trt && \
+#     # python3 setup.py install
+#     python3 setup.py build develop
+# # or python setup.py install --plugins
 
 
 RUN apt-get install -y sudo

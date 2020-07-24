@@ -1,0 +1,50 @@
+FROM pytorch/pytorch:1.3-cuda10.1-cudnn7-devel
+
+ENV DEBIAN_FRONTEND=noninteractive
+ADD requirements.txt .
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    python3 get-pip.py --force-reinstall && \
+    pip3 install -U pip
+RUN apt-get update && \
+    apt-get install -y git gitk libopencv-dev && \
+    pip3 install -U pip && \
+    pip3 install --timeout 600 -r requirements.txt
+
+# spconv
+RUN pip3 install cmake && \
+    apt-get install -y libboost-all-dev
+RUN git clone https://github.com/traveller59/spconv.git --recursive && \
+    cd spconv && \
+    # git checkout 8da6f96 && \
+    git submodule update --init --recursive && \
+    python3 setup.py bdist_wheel && \
+    cd dist && \
+    pip3 install *.whl
+
+# apex
+RUN git clone https://github.com/NVIDIA/apex && \
+    cd apex && \
+    pip3 install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+# nuscenes-devkit
+RUN pip3 install setuptools==39.1.0 && \
+    git clone https://github.com/poodarchu/nuscenes.git && \
+    cd nuscenes && \
+    python3 setup.py install
+
+# install Det3D
+
+
+# onnx runtime
+RUN pip3 install onnxruntime-gpu
+
+
+RUN apt-get install -y sudo
+ARG DOCKER_UID=1000
+ARG DOCKER_USER=docker
+ARG DOCKER_PASSWORD=docker
+RUN useradd -m \
+  --uid ${DOCKER_UID} --groups sudo ${DOCKER_USER} \
+  && echo ${DOCKER_USER}:${DOCKER_PASSWORD} | chpasswd
+
+USER ${DOCKER_USER}

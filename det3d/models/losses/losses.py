@@ -20,10 +20,9 @@ from torch.autograd import Variable
 from ..registry import LOSSES
 from .utils import weight_reduce_loss
 
-
+@torch.jit.unused
 def indices_to_dense_vector(
-    indices, size, indices_value=1.0, default_value=0, dtype=np.float32
-):
+    indices, size, indices_value=1.0, default_value=0):
     """Creates dense vector with indices set to specific value and rest to zeros.
 
     This function exists because it is unclear if it is safe to use
@@ -176,6 +175,7 @@ class WeightedSmoothL1Loss(nn.Module):
         self._reduction = reduction
         self._loss_weight = loss_weight
 
+    @torch.jit.unused
     def forward(self, prediction_tensor, target_tensor, weights=None):
         """Compute loss function.
 
@@ -222,6 +222,7 @@ def _sigmoid_cross_entropy_with_logits(logits, labels):
     return loss
 
 
+@torch.jit.unused
 def _softmax_cross_entropy_with_logits(logits, labels):
     param = list(range(len(logits.shape)))
     transpose_param = [0] + [param[-1]] + param[1:-1]
@@ -265,7 +266,6 @@ class WeightedSigmoidClassificationLoss(Loss):
         )
         return per_entry_cross_ent * weights
 
-
 @LOSSES.register_module
 class SigmoidFocalLoss(nn.Module):
     """Sigmoid focal cross entropy loss.
@@ -289,8 +289,9 @@ class SigmoidFocalLoss(nn.Module):
         self._reduction = reduction
         self._loss_weight = loss_weight
 
+    @torch.jit.unused
     def forward(
-        self, prediction_tensor, target_tensor, weights=None, class_indices=None
+        self, prediction_tensor, target_tensor, weights, class_indices=None
     ):
         """Compute loss function.
 
@@ -310,7 +311,7 @@ class SigmoidFocalLoss(nn.Module):
         weights = weights.unsqueeze(2)
         if class_indices is not None:
             weights *= (
-                indices_to_dense_vector(class_indices, prediction_tensor.shape[2])
+                indices_to_dense_vector(class_indices, torch.tensor(prediction_tensor.shape[2]))
                 .view(1, 1, -1)
                 .type_as(prediction_tensor)
             )

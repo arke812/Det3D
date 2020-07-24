@@ -42,9 +42,9 @@ class PFNLayer(nn.Module):
     def forward(self, inputs):
 
         x = self.linear(inputs)
-        torch.backends.cudnn.enabled = False
+        # torch.backends.cudnn.enabled = False
         x = self.norm(x.permute(0, 2, 1).contiguous()).permute(0, 2, 1).contiguous()
-        torch.backends.cudnn.enabled = True
+        # torch.backends.cudnn.enabled = True
         x = F.relu(x)
 
         x_max = torch.max(x, dim=1, keepdim=True)[0]
@@ -126,13 +126,15 @@ class PillarFeatureNet(nn.Module):
 
         # Find distance of x, y, and z from pillar center
         # f_center = features[:, :, :2]
-        f_center = torch.zeros_like(features[:, :, :2])
-        f_center[:, :, 0] = features[:, :, 0] - (
+        # f_center = torch.zeros_like(features[:, :, :2])
+        f_center_x = features[:, :, 0] - (
             coors[:, 3].to(dtype).unsqueeze(1) * self.vx + self.x_offset
         )
-        f_center[:, :, 1] = features[:, :, 1] - (
+        f_center_y = features[:, :, 1] - (
             coors[:, 2].to(dtype).unsqueeze(1) * self.vy + self.y_offset
         )
+
+        f_center = torch.stack([f_center_x, f_center_y], -1)
 
         # Combine together feature decorations
         features_ls = [features, f_cluster, f_center]
@@ -143,8 +145,8 @@ class PillarFeatureNet(nn.Module):
 
         # The feature decorations were calculated without regard to whether pillar was empty. Need to ensure that
         # empty pillars remain set to zeros.
-        voxel_count = features.shape[1]
-        mask = get_paddings_indicator(num_voxels, voxel_count, axis=0)
+        voxel_count = torch.tensor(features.shape[1])
+        mask = get_paddings_indicator(num_voxels, voxel_count, axis=torch.tensor(0))
         mask = torch.unsqueeze(mask, -1).type_as(features)
         features *= mask
 
@@ -174,27 +176,32 @@ class PointPillarsScatter(nn.Module):
 
     def forward(self, voxel_features, coords, batch_size, input_shape):
 
-        self.nx = input_shape[0]
-        self.ny = input_shape[1]
+        nx = input_shape[0]
+        ny = input_shape[1]
 
         # batch_canvas will be the final output.
         batch_canvas = []
-        for batch_itt in range(batch_size):
+        for batch_itt in range(int(batch_size)):
             # Create the canvas for this sample
             canvas = torch.zeros(
                 self.nchannels,
-                self.nx * self.ny,
+                nx * ny,
                 dtype=voxel_features.dtype,
                 device=voxel_features.device,
             )
 
             # Only include non-empty pillars
-            batch_mask = coords[:, 0] == batch_itt
+            if batch_size != 1:
+                batch_mask = coords[:, 0] == batch_itt
 
-            this_coords = coords[batch_mask, :]
-            indices = this_coords[:, 2] * self.nx + this_coords[:, 3]
-            indices = indices.type(torch.long)
-            voxels = voxel_features[batch_mask, :]
+                this_coords = coords[batch_mask, :]
+                indices = this_coords[:, 2] * nx + this_coords[:, 3]
+                voxels = voxel_features[batch_mask, :]
+            else: # for onnx export
+                indices = coords[:, 2] * nx + coords[:, 3]
+                voxels = voxel_features
+
+            indices = indices.long()
             voxels = voxels.t()
 
             # Now scatter the blob back to the canvas.
@@ -207,5 +214,5 @@ class PointPillarsScatter(nn.Module):
         batch_canvas = torch.stack(batch_canvas, 0)
 
         # Undo the column stacking to final 4-dim tensor
-        batch_canvas = batch_canvas.view(batch_size, self.nchannels, self.ny, self.nx)
+        batch_canvas = batch_canvas.view(batch_size, self.nchannels, ny, nx)
         return batch_canvas

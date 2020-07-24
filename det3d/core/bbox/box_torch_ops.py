@@ -529,8 +529,8 @@ def rotate_nms(
     rbboxes, scores, pre_max_size=None, post_max_size=None, iou_threshold=0.5
 ):
     if pre_max_size is not None:
-        num_keeped_scores = scores.shape[0]
-        pre_max_size = torch.min(torch.cat([torch.tensor([num_keeped_scores]), torch.tensor([pre_max_size])]))
+        num_keeped_scores = scores.shape
+        pre_max_size = torch.min(torch.cat([torch.tensor(num_keeped_scores), torch.tensor([pre_max_size])]))
         scores, indices = torch.topk(scores, k=pre_max_size)
         rbboxes = rbboxes[indices]
     dets = torch.cat([rbboxes, scores.unsqueeze(-1)], dim=1)

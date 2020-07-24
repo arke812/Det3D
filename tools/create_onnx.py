@@ -65,10 +65,6 @@ def parse_args():
 
 
 def create_onnx():
-    import torch
-    import torch2trt as t2t
-    from torch2trt import torch2trt
-
     # load model
     args = parse_args()
 
@@ -114,6 +110,7 @@ def create_onnx():
     if dbg:
         cfg.model.type = cfg.model.type + 'ListIOWrapper'
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+    checkpoint = load_checkpoint(model, args.checkpoint, map_location="cpu")
     # model = MegDataParallel(model, device_ids=[0])
     model.to('cuda')
 
@@ -128,8 +125,8 @@ def create_onnx():
 
     results_dict = {}
     # prog_bar = torchie.ProgressBar(len(data_loader.dataset))
-    batch = next(iter(data_loader))
-    # example = example_convert_to_torch(batch, device=device)
+    dlit = iter(data_loader)
+    batch = next(dlit)
     example = example_to_device(batch, device='cuda')
 
     with torch.no_grad():
@@ -143,30 +140,12 @@ def create_onnx():
                             example['num_voxels'].int().unsqueeze(0),
                             torch.tensor(example["shape"][0]).int().unsqueeze(0).to('cuda'),
                             example["anchors"][0].unsqueeze(0),
-                            return_loss=False)
-        # for output in outputs:
-        #     token = output["metadata"]["token"]
-        #     for k, v in output.items():
-        #         if k not in [
-        #             "metadata",
-        #         ]:
-        #             output[k] = v.to(cpu_device)
-        #     results_dict.update(
-        #         {token: output,}
-        #     )
-    # return results_dict
+                            return_loss=False,
+                            # no_nms=True
+                            )
 
 
-
-
-    # convert to TensorRT feeding sample data as input
-    # from torchvision.models.alexnet import alexnet
-    # model = alexnet(pretrained=False).eval().cuda()
-    # x = torch.ones((1, 3, 224, 224)).cuda()
-    # model_trt = torch2trt(model, [x])
-
-    # memo: first dimension must be a batch dimension for torch2trt...
-
+        # onnx
         input_shape_torch = torch.tensor(example["shape"][0])
         example_list = [example['voxels'].unsqueeze(0),
                         example['coordinates'].unsqueeze(0),
@@ -175,47 +154,26 @@ def create_onnx():
                         # input_shape_torch.int().unsqueeze(0).to('cuda'),
                         input_shape_torch.unsqueeze(0).to('cuda'),
                         example['anchors'][0].unsqueeze(0)]
-        input_names = ['voxels', 'coordinates', 'num_points', 'num_voxels', 'input_shape', 'anchors']
-        output_names = ['box3d_lidar', 'scores', 'label_preds']
+        # input_names = ['voxels', 'coordinates', 'num_points', 'num_voxels', 'input_shape', 'anchors']
+        input_names = ['voxels', 'coordinates', 'num_points', 'num_voxels', 'input_shape']
+        # output_names = ['box3d_lidar', 'scores', 'label_preds']
+        output_names = ['box_preds', 'cls_preds', 'dir_cls_preds']
         # TODO:
         # - compare results
         # - support dynamic input/output
         torch.onnx.export(model, tuple(example_list), 'pointpillars.onnx',
                           input_names=input_names, output_names=output_names,
-                          verbose=True, opset_version=11)
-
-        # input_features = model.reader(
-        #     example['voxels'], example['num_voxels'].int(), example['coordinates']
-        # )
-        # tmp_mdl = PointPillarsScatterTest()
-        # test_input = (input_features, example['coordinates'], torch.tensor(1).to('cuda'), input_shape_torch.to('cuda'))
-        # torch.onnx.export(tmp_mdl, #model.backbone,
-        #                   test_input,
-        #                   'pointpillars.onnx', verbose=True, opset_version=11)
-
-    # # caffe2
-    # import onnx
-
-    # # Load the ONNX model
-    # model = onnx.load('pointpillars.onnx')
-
-    # # Check that the IR is well formed
-    # onnx.checker.check_model(model)
-
-    # # Print a human readable representation of the graph
-    # onnx.helper.printable_graph(model.graph)
-    # import caffe2.python.onnx.backend as backend
-    # import numpy as np
-    # rep = backend.prepare(model, device="CUDA:0") # or "CPU"
-    # # For the Caffe2 backend:
-    # #     rep.predict_net is the Caffe2 protobuf for the network
-    # #     rep.workspace is the Caffe2 workspace for the network
-    # #       (see the class caffe2.python.onnx.backend.Workspace)
-    # outputs = rep.run(np.random.randn(10, 3, 224, 224).astype(np.float32))
-    # # To run networks with more than one input, pass a tuple
-    # # rather than a single numpy ndarray.
-    # print(outputs[0])
-
+                          dynamic_axes={'voxels': {1: 'nvoxel'},
+                                        'coordinates': {1: 'nvoxel'},
+                                        'num_points': {1: 'nvoxel'},
+                                        'num_voxels': [],
+                                        'input_shape': [],
+                                        'anchors': []},
+                          verbose=True,
+                          opset_version=11,
+                        #   opset_version=9,
+                        #   opset_version=7,
+                          )
 
 
     import onnxruntime as ort
@@ -226,12 +184,68 @@ def create_onnx():
                                      'num_points': example_list[2].cpu().numpy(),
                                      'num_voxels': example_list[3].cpu().numpy(),
                                      'input_shape': example_list[4].cpu().numpy(),
-                                     'anchors': example_list[5].cpu().numpy()
+                                    #  'anchors': example_list[5].cpu().numpy()
                                     }
                                     )
 
-    print(outputs[1])
-    print(outputs_onnx[1])
+    # torch script
+    with torch.no_grad():
+        # sm = torch.jit.script(model)
+
+        model_trace = torch.jit.trace(model, example_list)
+        model_trace.save('pointpillras_trace.pt')
+        outputs_trace = model_trace(*example_list) 
+
+    for i in range(len(outputs)):
+        print('max abs error for output [{}]:'.format(i))
+        print('onnx: {}'.format(np.abs(outputs_onnx[i] - outputs[i].cpu().numpy()).max()))
+        print('trace: {}'.format(np.abs(outputs_trace[i].cpu().numpy() - outputs[i].cpu().numpy()).max()))
+
+    # next sample
+    batch = next(dlit)
+    example = example_to_device(batch, device='cuda')
+    with torch.no_grad():
+        show = False
+        if not dbg:
+            outputs2 = model(example, return_loss=False, rescale=not show)
+        else:
+            outputs2 = model(example['voxels'].unsqueeze(0),
+                            example['coordinates'].unsqueeze(0),
+                            example['num_points'].unsqueeze(0),
+                            example['num_voxels'].int().unsqueeze(0),
+                            torch.tensor(example["shape"][0]).int().unsqueeze(0).to('cuda'),
+                            example["anchors"][0].unsqueeze(0),
+                            return_loss=False)
+
+    example_list = [example['voxels'].unsqueeze(0),
+                    example['coordinates'].unsqueeze(0),
+                    example['num_points'].unsqueeze(0),
+                    example['num_voxels'].int().unsqueeze(0),
+                    # input_shape_torch.int().unsqueeze(0).to('cuda'),
+                    input_shape_torch.unsqueeze(0).to('cuda'),
+                    example['anchors'][0].unsqueeze(0),
+                    ]
+
+    outputs2_onnx = ort_session.run(None, {'voxels': example_list[0].cpu().numpy(),
+                                     'coordinates': example_list[1].cpu().numpy(),
+                                     'num_points': example_list[2].cpu().numpy(),
+                                     'num_voxels': example_list[3].cpu().numpy(),
+                                     'input_shape': example_list[4].cpu().numpy(),
+                                    #  'anchors': example_list[5].cpu().numpy()
+                                    }
+                                    )
+
+    with torch.no_grad():
+        outputs2_trace = model_trace(*example_list) 
+
+    # print(outputs2[1])
+    # print(outputs2_onnx[1])
+    # print(outputs_onnx[1] - outputs[1].cpu().numpy())
+
+    for i in range(len(outputs2)):
+        print('max abs error for output [{}]:'.format(i))
+        print('onnx: {}'.format(np.abs(outputs2_onnx[i] - outputs2[i].cpu().numpy()).max()))
+        print('trace: {}'.format(np.abs(outputs2_trace[i].cpu().numpy() - outputs2[i].cpu().numpy()).max()))
 
 
 if __name__ == "__main__":

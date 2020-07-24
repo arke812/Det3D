@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from enum import Enum
+from typing import Dict
 
 import numpy as np
 import torch
@@ -525,6 +526,7 @@ class MultiGroupHead(nn.Module):
         else:
             raise TypeError("pretrained must be a str or None")
 
+    @torch.jit.unused
     def forward(self, x):
         ret_dicts = []
         for task in self.tasks:
@@ -577,7 +579,8 @@ class MultiGroupHead(nn.Module):
             raise ValueError(f"unknown loss norm type. available: {list(LossNormType)}")
         return cls_weights, reg_weights, cared
 
-    def loss(self, example, preds_dicts, **kwargs):
+    @torch.jit.unused
+    def loss(self, example: Dict[str, torch.Tensor], preds_dicts: Dict[str, torch.Tensor], **kwargs):
 
         voxels = example["voxels"]
         num_points = example["num_points"]
@@ -1057,13 +1060,12 @@ class MultiGroupHead(nn.Module):
                 final_scores = scores
                 final_labels = label_preds
                 if post_center_range is not None:
-                    mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
-                    mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
-                    # mask1 = (final_box_preds[:, :3] >= post_center_range[:3]).int().min(1)[0]
-                    # mask2 = (final_box_preds[:, :3] <= post_center_range[3:]).int().min(1)[0]
-                    # mask = (mask1 * mask2).bool()
+                    # mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
+                    # mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
+                    mask1 = (final_box_preds[:, :3] >= post_center_range[:3]).int().min(1)[0]
+                    mask2 = (final_box_preds[:, :3] <= post_center_range[3:]).int().min(1)[0]
+                    mask = (mask1 * mask2).bool()
 
-                    # assert mask__.shape == mask.shape
                     predictions_dict = {
                         "box3d_lidar": final_box_preds[mask],
                         "scores": final_scores[mask],

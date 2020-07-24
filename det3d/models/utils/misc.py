@@ -19,7 +19,7 @@ import torch
 # ROI_MASK_PREDICTOR = Registry()
 
 
-class Sequential(torch.nn.Module):
+class Sequential(torch.nn.Sequential):
     r"""A sequential container.
     Modules will be added to it in the order they are passed in the constructor.
     Alternatively, an ordered dict of modules can also be passed in.
@@ -66,15 +66,15 @@ class Sequential(torch.nn.Module):
                 raise ValueError("name exists.")
             self.add_module(name, module)
 
-    def __getitem__(self, idx):
-        if not (-len(self) <= idx < len(self)):
-            raise IndexError("index {} is out of range".format(idx))
-        if idx < 0:
-            idx += len(self)
-        it = iter(self._modules.values())
-        for i in range(idx):
-            next(it)
-        return next(it)
+    # def __getitem__(self, idx):
+    #     if not (-len(self) <= idx < len(self)):
+    #         raise IndexError("index {} is out of range".format(idx))
+    #     if idx < 0:
+    #         idx += len(self)
+    #     it = iter(self._modules.values())
+    #     for i in range(idx):
+    #         next(it)
+    #     return next(it)
 
     def __len__(self):
         return len(self._modules)
@@ -86,13 +86,13 @@ class Sequential(torch.nn.Module):
                 raise KeyError("name exists")
         self.add_module(name, module)
 
-    def forward(self, input):
-        # i = 0
-        for module in self._modules.values():
-            # print(i)
-            input = module(input)
-            # i += 1
-        return input
+    # def forward(self, input):
+    #     # i = 0
+    #     for module in self._modules.values():
+    #         # print(i)
+    #         input = module(input)
+    #         # i += 1
+    #     return input
 
 
 class GroupNorm(torch.nn.GroupNorm):
@@ -177,7 +177,7 @@ def register_hook(tensor, msg):
     tensor.register_hook(get_printer(msg))
 
 
-def get_paddings_indicator(actual_num, max_num, axis=0):
+def get_paddings_indicator(actual_num, max_num, axis=torch.tensor(0)):
     """Create boolean mask by actually number of a padded tensor.
 
     Args:
