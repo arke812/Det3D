@@ -1047,20 +1047,23 @@ class MultiGroupHead(nn.Module):
                     # if ((box_preds[..., -1] - self.direction_offset) > 0).all():
                     #     raise RuntimeError('')
                     opp_labels = dir_labels.bool() == False
-                    box_preds[..., -1] += torch.where(
+                    box_preds[..., box_preds.shape[-1]-1] += torch.where(
                         opp_labels,
                         torch.tensor(np.pi).type_as(box_preds),
                         torch.tensor(0.0).type_as(box_preds),
                     )
+
                 final_box_preds = box_preds
                 final_scores = scores
                 final_labels = label_preds
                 if post_center_range is not None:
-                    # mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
-                    # mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
-                    mask1 = (final_box_preds[:, :3] >= post_center_range[:3]).int().min(1)[0]
-                    mask2 = (final_box_preds[:, :3] <= post_center_range[3:]).int().min(1)[0]
-                    mask = (mask1 * mask2).bool()
+                    mask = (final_box_preds[:, :3] >= post_center_range[:3]).all(1)
+                    mask &= (final_box_preds[:, :3] <= post_center_range[3:]).all(1)
+                    # mask1 = (final_box_preds[:, :3] >= post_center_range[:3]).int().min(1)[0]
+                    # mask2 = (final_box_preds[:, :3] <= post_center_range[3:]).int().min(1)[0]
+                    # mask = (mask1 * mask2).bool()
+
+                    # assert mask__.shape == mask.shape
                     predictions_dict = {
                         "box3d_lidar": final_box_preds[mask],
                         "scores": final_scores[mask],

@@ -35,7 +35,7 @@ class PointPillars(SingleStageDetector):
         num_points_in_voxel = example["num_points"]
         num_voxels = example["num_voxels"]
 
-        batch_size = len(num_voxels)
+        batch_size = num_voxels.shape[0]
 
         data = dict(
             features=voxels,
@@ -49,7 +49,7 @@ class PointPillars(SingleStageDetector):
         preds = self.bbox_head(x)
 
         if return_loss:
-            return self.bbox_head.loss(example, preds)
+            return self.bbox_head.loss(example, preds).update(preds)
         else:
             return self.bbox_head.predict(example, preds, self.test_cfg)
 

@@ -120,3 +120,22 @@ Det3D is a derivative codebase of [CBGS](https://arxiv.org/abs/1908.09492), if y
 * [mmcv](https://github.com/open-mmlab/mmcv)
 * [second.pytorch](https://github.com/traveller59/second.pytorch)
 * [maskrcnn_benchmark](https://github.com/facebookresearch/maskrcnn-benchmark)
+
+
+## 
+Evaluation official: car AP(Average Precision)@0.70, 0.70, 0.70:
+bbox AP:90.62, 88.66, 87.40
+bev  AP:89.83, 87.28, 85.66
+3d   AP:86.53, 76.85, 73.75
+aos  AP:87.52, 83.54, 80.94
+car AP(Average Precision)@0.70, 0.50, 0.50:
+bbox AP:90.62, 88.66, 87.40
+bev  AP:90.74, 89.73, 89.11
+3d   AP:90.74, 89.65, 88.91
+aos  AP:87.52, 83.54, 80.94
+
+Evaluation coco: car coco AP@0.50:0.05:0.95:
+bbox AP:71.58, 67.93, 66.34
+bev  AP:69.67, 66.09, 64.87
+3d   AP:59.65, 55.08, 53.56
+aos  AP:68.43, 63.57, 61.11
