@@ -176,8 +176,8 @@ class PointPillarsScatter(nn.Module):
 
     def forward(self, voxel_features, coords, batch_size, input_shape):
 
-        nx = input_shape[0]
-        ny = input_shape[1]
+        nx = torch.tensor(input_shape[0]).long()
+        ny = torch.tensor(input_shape[1]).long()
 
         # batch_canvas will be the final output.
         batch_canvas = []

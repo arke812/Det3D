@@ -21,7 +21,11 @@ class PointPillars(SingleStageDetector):
         super(PointPillars, self).__init__(
             reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained
         )
-        self._with_neck = self.with_neck
+        # self._with_neck = self.with_neck
+        self._no_nms = False
+
+    def no_nms(self, no_nms: bool=True):
+        self._no_nms = no_nms
 
     def extract_feat(self, data: Dict[str, Tensor]):
         input_features = self.reader(
@@ -30,11 +34,11 @@ class PointPillars(SingleStageDetector):
         x = self.backbone(
             input_features, data["coors"], data["batch_size"], data["input_shape"]
         )
-        if self._with_neck:
+        if self.with_neck:
             x = self.neck(x)
         return x
 
-    def forward(self, example: Dict[str, Tensor], return_loss: bool=True, no_nms: bool=False):
+    def forward(self, example: Dict[str, Tensor], return_loss: bool=True):
         voxels = example["voxels"]
         coordinates = example["coordinates"]
         num_points_in_voxel = example["num_points"]
@@ -52,7 +56,7 @@ class PointPillars(SingleStageDetector):
         x = self.extract_feat(data)
         preds = self.bbox_head(x)
 
-        if no_nms:
+        if self._no_nms:
             return preds
 
         if return_loss:
@@ -76,7 +80,7 @@ class PointPillarsListIOWrapper(PointPillars):
         super().__init__(
             reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained
         )
-        self.pp = PointPillars(reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained)
+        # self.pp = PointPillars(reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained)
 
     def forward(self,
         voxels,
@@ -86,12 +90,11 @@ class PointPillarsListIOWrapper(PointPillars):
         input_shape,
         anchors,
         return_loss: bool=False,
-        # no_nms=True,
         # **kwargs
         ):
         """
         """
-        no_nms: bool = True
+        # no_nms: bool = False
 
         example: Dict[str, Tensor] = {}
         example['voxels'] = voxels.squeeze(0)
@@ -101,14 +104,13 @@ class PointPillarsListIOWrapper(PointPillars):
         example['shape'] = input_shape
         example['anchors'] = anchors
 
-        out_dict = self.pp.forward(
+        # out_dict = self.pp.forward(
+        out_dict = super().forward(
             example,
             return_loss,
-            no_nms=no_nms,
-            # **kwargs
         )
 
-        if no_nms == True:
+        if self._no_nms == True:
             out_list = [(o['box_preds'], o['cls_preds'], o['dir_cls_preds']) for o in out_dict]
         else:
             out_list = [(o['box3d_lidar'], o['scores'], o['label_preds']) for o in out_dict]
