@@ -182,7 +182,7 @@ def create_onnx():
     outputs_onnx = ort_session.run(None, {'voxels': example_list[0].cpu().numpy(),
                                      'coordinates': example_list[1].cpu().numpy(),
                                      'num_points': example_list[2].cpu().numpy(),
-                                     'num_voxels': example_list[3].cpu().numpy(),
+                                    #  'num_voxels': example_list[3].cpu().numpy(),
                                      'input_shape': example_list[4].cpu().numpy(),
                                     #  'anchors': example_list[5].cpu().numpy()
                                     }
@@ -209,13 +209,13 @@ def create_onnx():
         if not dbg:
             outputs2 = model(example, return_loss=False, rescale=not show)
         else:
-            outputs2 = model(example['voxels'].unsqueeze(0),
-                            example['coordinates'].unsqueeze(0),
-                            example['num_points'].unsqueeze(0),
-                            example['num_voxels'].int().unsqueeze(0),
-                            torch.tensor(example["shape"][0]).int().unsqueeze(0).to('cuda'),
-                            example["anchors"][0].unsqueeze(0),
-                            return_loss=False)
+            torch_input = [example['voxels'].unsqueeze(0),
+                           example['coordinates'].unsqueeze(0),
+                           example['num_points'].unsqueeze(0),
+                           example['num_voxels'].int().unsqueeze(0),
+                           torch.tensor(example["shape"][0]).int().unsqueeze(0).to('cuda'),
+                           example["anchors"][0].unsqueeze(0)]
+            outputs2 = model(*torch_input, return_loss=False)
 
     example_list = [example['voxels'].unsqueeze(0),
                     example['coordinates'].unsqueeze(0),
@@ -226,26 +226,31 @@ def create_onnx():
                     example['anchors'][0].unsqueeze(0),
                     ]
 
-    outputs2_onnx = ort_session.run(None, {'voxels': example_list[0].cpu().numpy(),
-                                     'coordinates': example_list[1].cpu().numpy(),
-                                     'num_points': example_list[2].cpu().numpy(),
-                                     'num_voxels': example_list[3].cpu().numpy(),
-                                     'input_shape': example_list[4].cpu().numpy(),
-                                    #  'anchors': example_list[5].cpu().numpy()
-                                    }
-                                    )
+    onnx_input = {'voxels': example_list[0].cpu().numpy(),
+                  'coordinates': example_list[1].cpu().numpy(),
+                  'num_points': example_list[2].cpu().numpy(),
+                #   'num_voxels': example_list[3].cpu().numpy(),
+                  'input_shape': example_list[4].cpu().numpy(),
+                 #  'anchors': example_list[5].cpu().numpy()
+                 }
+    outputs2_onnx = ort_session.run(None, onnx_input)
 
     with torch.no_grad():
         outputs2_trace = model_trace(*example_list) 
 
-    # print(outputs2[1])
-    # print(outputs2_onnx[1])
-    # print(outputs_onnx[1] - outputs[1].cpu().numpy())
-
     for i in range(len(outputs2)):
         print('max abs error for output [{}]:'.format(i))
-        print('onnx: {}'.format(np.abs(outputs2_onnx[i] - outputs2[i].cpu().numpy()).max()))
+        # print('onnx: {}'.format(np.abs(outputs2_onnx[i] - outputs2[i].cpu().numpy()).max()))
         print('trace: {}'.format(np.abs(outputs2_trace[i].cpu().numpy() - outputs2[i].cpu().numpy()).max()))
+
+    # performance test
+    from timeit import timeit
+    N = 10
+    with torch.no_grad():
+        print('computation time:')
+        print('org: {} s'.format(timeit(lambda: model(*torch_input, return_loss=False), number=N)/N))
+        print('trace: {} s'.format(timeit(lambda: model_trace(*example_list), number=N)/N))
+        print('onnx: {} s'.format(timeit(lambda: ort_session.run(None, onnx_input), number=N)/N))
 
 
 if __name__ == "__main__":

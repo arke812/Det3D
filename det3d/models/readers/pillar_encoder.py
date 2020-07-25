@@ -181,7 +181,7 @@ class PointPillarsScatter(nn.Module):
 
         # batch_canvas will be the final output.
         batch_canvas = []
-        for batch_itt in range(int(batch_size)):
+        for batch_itt in range(batch_size):
             # Create the canvas for this sample
             canvas = torch.zeros(
                 self.nchannels,
@@ -200,6 +200,7 @@ class PointPillarsScatter(nn.Module):
             else: # for onnx export
                 indices = coords[:, 2] * nx + coords[:, 3]
                 voxels = voxel_features
+                batch_size = 1 # for onnx export
 
             indices = indices.long()
             voxels = voxels.t()

@@ -2,15 +2,15 @@
 # FROM pytorch/pytorch:1.3-cuda10.1-cudnn7-devel
 # FROM nvcr.io/nvidia/tensorrt:20.02-py3
 FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
+# FROM pytorch/pytorch:1.5.1-cuda10.1-cudnn7-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
 ADD requirements.txt .
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-    python3 get-pip.py --force-reinstall && \
-    pip3 install -U pip
 RUN apt-get update && \
-    apt-get install -y git gitk && \
-    pip3 install -U pip && \
+    apt-get install -y git gitk curl python3 python3-pip
+# RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+#     python3 get-pip.py --force-reinstall && \
+RUN pip3 install -U pip && \
     pip3 install --timeout 600 -r requirements.txt
 
 # RUN pip install torch==1.3.0 torchvision==0.4.1
@@ -70,13 +70,12 @@ RUN pip3 install onnxruntime-gpu
 #     python3 setup.py build develop
 # # or python setup.py install --plugins
 
-
 RUN apt-get install -y sudo
-ARG DOCKER_UID=1000
-ARG DOCKER_USER=docker
-ARG DOCKER_PASSWORD=docker
-RUN useradd -m \
-  --uid ${DOCKER_UID} --groups sudo ${DOCKER_USER} \
-  && echo ${DOCKER_USER}:${DOCKER_PASSWORD} | chpasswd
+ENV USER_NAME=docker
+RUN echo "${USER_NAME} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/${USER_NAME}
+RUN chmod u+s /usr/sbin/useradd \
+    && chmod u+s /usr/sbin/groupadd
 
-USER ${DOCKER_USER}
+COPY entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

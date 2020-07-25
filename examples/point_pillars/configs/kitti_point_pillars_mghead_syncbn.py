@@ -191,10 +191,10 @@ val_anno = data_root / 'kitti_infos_val.pkl'
 test_anno = None
 
 data = dict(
-    samples_per_gpu=3,
-    workers_per_gpu=3,
-    # samples_per_gpu=1,
-    # workers_per_gpu=1,
+    # samples_per_gpu=3,
+    # workers_per_gpu=3,
+    samples_per_gpu=1,
+    workers_per_gpu=1,
     train=dict(
         type=dataset_type,
         root_path=data_root,
